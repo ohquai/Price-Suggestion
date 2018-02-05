@@ -283,21 +283,21 @@ def add_additional_feature(train, test):
     train.loc[:, 'may_have_pictures'] = pd.Series(may_have_pictures(train.item_description), index=train.index).astype('category')
     test.loc[:, 'may_have_pictures'] = pd.Series(may_have_pictures(test.item_description), index=test.index).astype('category')
 
-    # Add box
-    train.loc[:, 'may_have_box'] = pd.Series(may_have_box(train.item_description), index=train.index).astype('category')
-    test.loc[:, 'may_have_box'] = pd.Series(may_have_box(test.item_description), index=test.index).astype('category')
-
-    # Add inscription
-    train.loc[:, 'may_have_ins'] = pd.Series(may_have_ins(train.item_description), index=train.index).astype('category')
-    test.loc[:, 'may_have_ins'] = pd.Series(may_have_ins(test.item_description), index=test.index).astype('category')
-
-    # Add picture
-    train.loc[:, 'may_used'] = pd.Series(may_used(train.item_description), index=train.index).astype('category')
-    test.loc[:, 'may_used'] = pd.Series(may_used(test.item_description), index=test.index).astype('category')
-
-    # Add picture
-    train.loc[:, 'may_have_mat'] = pd.Series(may_have_materials(train.item_description), index=train.index).astype('category')
-    test.loc[:, 'may_have_mat'] = pd.Series(may_have_materials(test.item_description), index=test.index).astype('category')
+    # # Add box
+    # train.loc[:, 'may_have_box'] = pd.Series(may_have_box(train.item_description), index=train.index).astype('category')
+    # test.loc[:, 'may_have_box'] = pd.Series(may_have_box(test.item_description), index=test.index).astype('category')
+    #
+    # # Add inscription
+    # train.loc[:, 'may_have_ins'] = pd.Series(may_have_ins(train.item_description), index=train.index).astype('category')
+    # test.loc[:, 'may_have_ins'] = pd.Series(may_have_ins(test.item_description), index=test.index).astype('category')
+    #
+    # # Add picture
+    # train.loc[:, 'may_used'] = pd.Series(may_used(train.item_description), index=train.index).astype('category')
+    # test.loc[:, 'may_used'] = pd.Series(may_used(test.item_description), index=test.index).astype('category')
+    #
+    # # Add picture
+    # train.loc[:, 'may_have_mat'] = pd.Series(may_have_materials(train.item_description), index=train.index).astype('category')
+    # test.loc[:, 'may_have_mat'] = pd.Series(may_have_materials(test.item_description), index=test.index).astype('category')
 
     return train, test
 
