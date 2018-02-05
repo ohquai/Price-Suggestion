@@ -69,6 +69,20 @@ def get_best_ratio(Y_dev_preds_rnn, Y_dev_preds_ridgeCV, Y_dev_preds_ridge):
     return best1, best2
 
 
+def aggregate_predicts3(Y1, Y2, Y3, ratio1, ratio2):
+    assert Y1.shape == Y2.shape
+    return Y1 * ratio1 + Y2 * ratio2 + Y3 * (1.0 - ratio1-ratio2)
+
+
+# Filling missing values
+def fill_missing_values(df):
+    df.category_name.fillna(value="missing", inplace=True)
+    df.brand_name.fillna(value="missing", inplace=True)
+    df.item_description.fillna(value="missing", inplace=True)
+    df.item_description.replace('No description yet',"missing", inplace=True)
+    return df
+
+
 train_df = pd.read_table('../input/train.tsv')
 test_df = pd.read_table('../input/test.tsv')
 print(train_df.shape, test_df.shape)
@@ -146,14 +160,6 @@ print("Testing on", n_tests, "examples")
 
 # Concatenate train - dev - test data for easy to handle
 full_df = pd.concat([train_df, dev_df, test_df])
-
-# Filling missing values
-def fill_missing_values(df):
-    df.category_name.fillna(value="missing", inplace=True)
-    df.brand_name.fillna(value="missing", inplace=True)
-    df.item_description.fillna(value="missing", inplace=True)
-    df.item_description.replace('No description yet',"missing", inplace=True)
-    return df
 
 print("Filling missing data...")
 full_df = fill_missing_values(full_df)
@@ -459,13 +465,8 @@ ridge_preds = np.expm1(ridge_preds)
 ridgeCV_preds = ridge_modelCV.predict(X_test)
 ridgeCV_preds = np.expm1(ridgeCV_preds)
 
-def aggregate_predicts3(Y1, Y2, Y3, ratio1, ratio2):
-    assert Y1.shape == Y2.shape
-    return Y1 * ratio1 + Y2 * ratio2 + Y3 * (1.0 - ratio1-ratio2)
-
 # Y_dev_preds = aggregate_predicts3(Y_dev_preds_rnn, Y_dev_preds_ridgeCV, Y_dev_preds_ridge, 0.4, 0.3)
 # print("RMSL error for RNN + Ridge + RidgeCV on dev set:", rmsle(Y_dev, Y_dev_preds))
-
 
 best1, best2 = get_best_ratio(Y_dev_preds_rnn, Y_dev_preds_ridgeCV, Y_dev_preds_ridge)
 
