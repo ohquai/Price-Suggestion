@@ -458,6 +458,9 @@ test = pd.read_table("../input/test.tsv", sep=None, engine='python')
 print(train.shape)
 print(test.shape)
 
+# drop low price data  (ADDNEW)
+train = train.drop(train[(train.price < 3.0)].index)
+
 train, test = data_preprocessing(train, test)
 # fill nan value
 # train = fill_missing_value(train)
@@ -602,7 +605,7 @@ train["target"] = target_scaler.fit_transform(train.target.values.reshape(-1, 1)
 # train.to_csv(path + "clean_train.csv", encoding="utf8")
 
 # EXTRACT DEVELOPTMENT TEST
-dtrain, dvalid = train_test_split(train, random_state=2017, train_size=0.99)
+dtrain, dvalid = train_test_split(train, random_state=123, train_size=0.99)
 print(dtrain.shape)
 print(dvalid.shape)
 

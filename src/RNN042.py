@@ -83,6 +83,19 @@ def fill_missing_values(df):
     return df
 
 
+def brandfinder(line):
+    brand = line[0]
+    name = line[1]
+    namesplit = name.split(' ')
+    if brand == 'missing':
+        for x in namesplit:
+            if x in all_brands:
+                return name
+    if name in all_brands:
+        return name
+    return brand
+
+
 train_df = pd.read_table('../input/train.tsv')
 test_df = pd.read_table('../input/test.tsv')
 print(train_df.shape, test_df.shape)
@@ -91,7 +104,7 @@ print(train_df.shape, test_df.shape)
 train_df = train_df.drop(train_df[(train_df.price < 3.0)].index)
 print(train_df.shape)
 
-stop = stopwords.words('english')
+# stop = stopwords.words('english')
 # train_df.item_description.fillna(value='No description yet', inplace=True)
 # train_df['item_description'] = train_df['item_description'].apply(lambda x: ' '.join([word for word in x.split() if word not in (stop)]))
 # train_df.name.fillna(value="missing", inplace=True)
@@ -126,18 +139,6 @@ test_df.brand_name.fillna(value="missing", inplace=True)
 
 # get to finding!
 premissing = len(train_df.loc[train_df['brand_name'] == 'missing'])
-def brandfinder(line):
-    brand = line[0]
-    name = line[1]
-    namesplit = name.split(' ')
-    if brand == 'missing':
-        for x in namesplit:
-            if x in all_brands:
-                return name
-    if name in all_brands:
-        return name
-    return brand
-
 
 train_df['brand_name'] = train_df[['brand_name', 'name']].apply(brandfinder, axis=1)
 test_df['brand_name'] = test_df[['brand_name', 'name']].apply(brandfinder, axis=1)
