@@ -96,8 +96,11 @@ def brandfinder(line):
     return brand
 
 
-train_df = pd.read_table('../input/train.tsv')
-test_df = pd.read_table('../input/test.tsv')
+# train_df = pd.read_table('../input/train.tsv')
+# test_df = pd.read_table('../input/test.tsv')
+path = "D:/Project/Price/"
+train_df = pd.read_table(path + "train.tsv", sep=None, engine='python')
+test_df = pd.read_table(path + "test.tsv", sep=None, engine='python')
 print(train_df.shape, test_df.shape)
 
 # 去除低价商品

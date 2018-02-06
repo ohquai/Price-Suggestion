@@ -85,6 +85,19 @@ def category_split(df):
     return df
 
 
+# get name and description lengths
+def wordCount(text):
+    try:
+        if text == 'No description yet':
+            return 0
+        else:
+            text = text.lower()
+            words = [w for w in text.split(" ")]
+            return len(words)
+    except:
+        return 0
+
+
 def label_encoder(train, test, col_name):
     # PROCESS CATEGORICAL DATA
     print("Handling categorical variables...")
@@ -346,7 +359,6 @@ def data_preprocessing(train, test):
     train = fill_missing_value(train)
     test = fill_missing_value(test)
     print("filling missing value complete")
-    time1 = time.time()
 
     # transform descriptions and names to lower cases
     train.loc[:, 'item_description'] = train.item_description.str.lower()
@@ -356,7 +368,6 @@ def data_preprocessing(train, test):
     train.loc[:, 'category_name'] = train.category_name.str.lower()
     test.loc[:, 'category_name'] = test.category_name.str.lower()
     print("Text to lower cases finished")
-    time3 = time.time()
 
     return train, test
 
@@ -448,25 +459,20 @@ def get_model():
 
 
 # LOAD DATA
-# print("Loading data...")
-path = "H:/Project/PriceSuggestion/"
-# path = "D:/Project/Price/"
-# train = pd.read_table(path + "train.tsv", sep=None, engine='python')
-# test = pd.read_table(path + "test.tsv", sep=None, engine='python')
-train = pd.read_table("../input/train.tsv", sep=None, engine='python')
-test = pd.read_table("../input/test.tsv", sep=None, engine='python')
+
+# path = "H:/Project/PriceSuggestion/"
+path = "D:/Project/Price/"
+train = pd.read_table(path + "train.tsv", sep=None, engine='python')
+test = pd.read_table(path + "test.tsv", sep=None, engine='python')
+# train = pd.read_table("../input/train.tsv", sep=None, engine='python')
+# test = pd.read_table("../input/test.tsv", sep=None, engine='python')
 print(train.shape)
 print(test.shape)
 
+time1 = time.time()
 # drop low price data  (ADDNEW)
 train = train.drop(train[(train.price < 3.0)].index)
-
 train, test = data_preprocessing(train, test)
-# fill nan value
-# train = fill_missing_value(train)
-# test = fill_missing_value(test)
-# print("filling missing value complete")
-# time1 = time.time()
 
 # split category to 3 levels
 train = category_split(train)
@@ -475,16 +481,7 @@ print("category spliting complete")
 time2 = time.time()
 
 train, test = add_mean_category_price(train, test)
-
-# # transform descriptions and names to lower cases
-# train.loc[:, 'item_description'] = train.item_description.str.lower()
-# test.loc[:, 'item_description'] = test.item_description.str.lower()
-# train.loc[:, 'name'] = train.name.str.lower()
-# test.loc[:, 'name'] = test.name.str.lower()
-# train.loc[:, 'category_name'] = train.category_name.str.lower()
-# test.loc[:, 'category_name'] = test.category_name.str.lower()
-# print("Text to lower cases finished")
-# time3 = time.time()
+time3 = time.time()
 
 # Lemmatize
 # train['desc_lemmas'] = get_lemma_desc(train.item_description, train.index)
@@ -533,13 +530,28 @@ print("max item desc seq " + str(max_seq_item_description))
 time10 = time.time()
 
 # Add description length
+# idx_split = len(train.item_description)
+# train['desc_len'] = np.array(list(map(lambda d: len(d), train['seq_item_description'])))
+# test['desc_len'] = np.array(list(map(lambda d: len(d), test['seq_item_description'])))
+# scaler = MinMaxScaler()
+# all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1),
+#                                                   test['desc_len'].values.reshape(-1, 1)]))
+# train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+# print("desc length calculation finish")
+# time11 = time.time()
+
+train['desc_len'] = train['item_description'].apply(lambda x: wordCount(x))
+test['desc_len'] = test['item_description'].apply(lambda x: wordCount(x))
+# train['name_len'] = train['name'].apply(lambda x: wordCount(x))
+# test['name_len'] = test['name'].apply(lambda x: wordCount(x))
+
 idx_split = len(train.item_description)
-train['desc_len'] = np.array(list(map(lambda d: len(d), train['seq_item_description'])))
-test['desc_len'] = np.array(list(map(lambda d: len(d), test['seq_item_description'])))
 scaler = MinMaxScaler()
-all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1),
-                                                  test['desc_len'].values.reshape(-1, 1)]))
+all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
 train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+# all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
+# train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+
 print("desc length calculation finish")
 time11 = time.time()
 
@@ -556,9 +568,9 @@ train, test = add_additional_feature(train, test)
 print('add_additional_feature finished.')
 time14 = time.time()
 
-# print("time 1 {0}".format(time2-time1))
-# print("time 2 {0}".format(time3-time2))
-# print("time 3 {0}".format(time4-time3))
+print("time 1 {0}".format(time2-time1))
+print("time 2 {0}".format(time3-time2))
+print("time 3 {0}".format(time4-time3))
 print("time 4 {0}".format(time5-time4))
 print("time 5 {0}".format(time6-time5))
 print("time 6 {0}".format(time7-time6))
@@ -663,3 +675,12 @@ print("time 2{0}".format(time3-time2))
 print("time 3{0}".format(time4-time3))
 print("time 4{0}".format(time5-time4))
 print("time 5{0}".format(time6-time5))
+
+
+# 1466844/1466844 [==============================] - 586s 400us/step - loss: 0.0186 - mean_absolute_error: 0.1033 - rmsle_cust: 0.0043 - val_loss: 0.0202 - val_mean_absolute_error: 0.1073 - val_rmsle_cust: 0.0041
+# RMSLE error on dev test: 0.45720729563135387
+# online 0.44947
+
+# 采用了新的长度计算方式，运行了一个epoch，大约在13min左右
+# 1465344/1466844 [============================>.] - ETA: 0s - loss: 0.0791 - mean_absolute_error: 0.1863 - rmsle_cust: 0.0071
+# 1466844/1466844 [==============================] - 645s 440us/step - loss: 0.0790 - mean_absolute_error: 0.1862 - rmsle_cust: 0.0071 - val_loss: 0.0248 - val_mean_absolute_error: 0.1207 - val_rmsle_cust: 0.0048
