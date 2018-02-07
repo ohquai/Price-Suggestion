@@ -378,7 +378,7 @@ def get_keras_data(dataset):
         'name': pad_sequences(dataset.seq_name, maxlen=MAX_NAME_SEQ)
         , 'item_desc': pad_sequences(dataset.seq_item_description, maxlen=MAX_ITEM_DESC_SEQ)
         , 'brand_name': np.array(dataset.brand_name)
-        , 'category_name': pad_sequences(dataset.seq_category_name, maxlen=MAX_CATE_SEQ)
+        # , 'category_name': pad_sequences(dataset.seq_category_name, maxlen=MAX_CATE_SEQ)
         , 'category1_name': np.array(dataset.level1)
         , 'category2_name': np.array(dataset.level2)
         , 'category3_name': np.array(dataset.level3)
@@ -402,7 +402,7 @@ def get_model():
     name = Input(shape=[X_train["name"].shape[1]], name="name")
     item_desc = Input(shape=[X_train["item_desc"].shape[1]], name="item_desc")
     brand_name = Input(shape=[1], name="brand_name")
-    category_name = Input(shape=[X_train["category_name"].shape[1]], name="category_name")
+    # category_name = Input(shape=[X_train["category_name"].shape[1]], name="category_name")
     category1_name = Input(shape=[1], name="category1_name")
     category2_name = Input(shape=[1], name="category2_name")
     category3_name = Input(shape=[1], name="category3_name")
@@ -416,7 +416,7 @@ def get_model():
     emb_name = Embedding(MAX_TEXT, emb_size//3)(name)
     emb_item_desc = Embedding(MAX_TEXT, emb_size)(item_desc)
     emb_brand_name = Embedding(MAX_BRAND, 10)(brand_name)
-    emb_category_name = Embedding(MAX_TEXT, emb_size//3)(category_name)
+    # emb_category_name = Embedding(MAX_TEXT, emb_size//3)(category_name)
     emb_category1_name = Embedding(MAX_CATEGORY1, 10)(category1_name)
     emb_category2_name = Embedding(MAX_CATEGORY2, 10)(category2_name)
     emb_category3_name = Embedding(MAX_CATEGORY3, 10)(category3_name)
@@ -424,8 +424,8 @@ def get_model():
 
     # gru layer
     rnn_layer1 = GRU(16)(emb_item_desc)
-    rnn_layer2 = GRU(2)(emb_name)
-    rnn_layer3 = GRU(8)(emb_category_name)
+    rnn_layer2 = GRU(4)(emb_name)
+    # rnn_layer3 = GRU(8)(emb_category_name)
 
     # main layer
     main_l = concatenate([Flatten()(emb_brand_name),
@@ -435,7 +435,7 @@ def get_model():
                           Flatten()(emb_item_condition),
                           rnn_layer1,
                           rnn_layer2,
-                          rnn_layer3,
+                          # rnn_layer3,
                           num_vars
                           # , may_have_vars
                           # , price_vars
@@ -449,8 +449,10 @@ def get_model():
     output = Dense(1, activation="linear")(main_l)
 
     # model
-    model_gru = Model([name, item_desc, brand_name, category_name,
-                       category1_name, category2_name, category3_name, item_condition, num_vars
+    model_gru = Model([name, item_desc, brand_name,
+                       # category_name,
+                       category1_name, category2_name, category3_name,
+                       item_condition, num_vars
                        # ,may_have_vars
                        #    , price_vars
                        ], output)
@@ -515,8 +517,8 @@ train["seq_item_description"] = tok_raw.texts_to_sequences(train.item_descriptio
 test["seq_item_description"] = tok_raw.texts_to_sequences(test.item_description)
 train["seq_name"] = tok_raw.texts_to_sequences(train.name)
 test["seq_name"] = tok_raw.texts_to_sequences(test.name)
-train["seq_category_name"] = tok_raw.texts_to_sequences(train.category_name)
-test["seq_category_name"] = tok_raw.texts_to_sequences(test.category_name)
+# train["seq_category_name"] = tok_raw.texts_to_sequences(train.category_name)
+# test["seq_category_name"] = tok_raw.texts_to_sequences(test.category_name)
 # train.head(3)
 print("texts_to_sequences finished")
 time9 = time.time()

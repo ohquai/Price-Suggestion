@@ -2,6 +2,7 @@ from datetime import datetime
 start_real = datetime.now()
 import numpy as np
 import pandas as pd
+import time
 
 from sklearn.preprocessing import LabelEncoder
 from sklearn.cross_validation import train_test_split
@@ -95,6 +96,8 @@ def brandfinder(line):
         return name
     return brand
 
+
+timettl1 = time.time()
 
 # train_df = pd.read_table('../input/train.tsv')
 # test_df = pd.read_table('../input/test.tsv')
@@ -370,3 +373,6 @@ print(" RMSLE error:", rmsle(Y_dev, Y_dev_preds_rnn))
 
 rnn_preds = rnn_model.predict(X_test, batch_size=BATCH_SIZE, verbose=1)
 rnn_preds = np.expm1(rnn_preds)
+
+timettl2 = time.time()
+print(timettl2 - timettl1)
