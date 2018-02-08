@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 from multiprocessing import Pool
 from sklearn.model_selection import train_test_split
+from sklearn.externals import joblib
 from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Dropout, Dense, BatchNormalization, Activation, concatenate, GRU, Embedding, Flatten, \
     BatchNormalization, LSTM
@@ -14,6 +15,7 @@ from keras.preprocessing.sequence import pad_sequences
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+import xgboost as xgb
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD
 import re
@@ -21,9 +23,10 @@ import time
 import matplotlib.pyplot as plt
 import math
 from numpy.random import seed
-seed(2018)
+# seed(2018)
 from tensorflow import set_random_seed
-set_random_seed(2018)
+# set_random_seed(2018)
+np.random.seed(123)
 
 NUM_BRANDS = 2500
 NAME_MIN_DF = 10
@@ -387,7 +390,9 @@ def get_keras_data(dataset):
         #                                 "may_used", "may_have_mat",
         #                                 # "desc_sentiment",
         #                                 "mean_price1", "mean_price2", "mean_price3"]])
-        , 'num_vars': np.array(dataset[["shipping", "desc_len"]])
+        , 'shipping': np.array(dataset[["shipping"]])
+        , 'desc_len': np.array(dataset[["desc_len"]])
+        # , 'name_len': np.array(dataset[["name_len"]])
         # , 'may_have_vars': np.array(dataset[["may_have_pictures", "may_have_box", "may_have_ins", "may_used", "may_have_mat",]])
         # , 'price_vars': np.array(dataset[["mean_price1", "mean_price2", "mean_price3"]])
     }
@@ -396,7 +401,7 @@ def get_keras_data(dataset):
 
 def get_model():
     # params
-    dr_r = 0.25
+    dr_r = 0.1
 
     # Inputs
     name = Input(shape=[X_train["name"].shape[1]], name="name")
@@ -407,7 +412,11 @@ def get_model():
     category2_name = Input(shape=[1], name="category2_name")
     category3_name = Input(shape=[1], name="category3_name")
     item_condition = Input(shape=[1], name="item_condition")
-    num_vars = Input(shape=[X_train["num_vars"].shape[1]], name="num_vars")
+    shipping = Input(shape=[1], name="shipping")
+    desc_len = Input(shape=[1], name="desc_len")
+    # name_len = Input(shape=[1], name="name_len")
+
+    # num_vars = Input(shape=[X_train["num_vars"].shape[1]], name="num_vars")
     # may_have_vars = Input(shape=[X_train["may_have_vars"].shape[1]], name="may_have_vars")
     # price_vars = Input(shape=[X_train["price_vars"].shape[1]], name="price_vars")
 
@@ -421,6 +430,8 @@ def get_model():
     emb_category2_name = Embedding(MAX_CATEGORY2, 10)(category2_name)
     emb_category3_name = Embedding(MAX_CATEGORY3, 10)(category3_name)
     emb_item_condition = Embedding(MAX_CONDITION, 5)(item_condition)
+    emb_shipping = Embedding(MAX_CONDITION, 5)(shipping)
+    emb_desc_len = Embedding(MAX_CONDITION, 5)(desc_len)
 
     # gru layer
     rnn_layer1 = GRU(16)(emb_item_desc)
@@ -433,10 +444,12 @@ def get_model():
                           Flatten()(emb_category2_name),
                           Flatten()(emb_category3_name),
                           Flatten()(emb_item_condition),
+                          Flatten()(emb_shipping),
+                          Flatten()(emb_desc_len),
                           rnn_layer1,
                           rnn_layer2,
                           # rnn_layer3,
-                          num_vars
+                          # num_vars
                           # , may_have_vars
                           # , price_vars
                           ])
@@ -455,7 +468,10 @@ def get_model():
     model_gru = Model([name, item_desc, brand_name,
                        # category_name,
                        category1_name, category2_name, category3_name,
-                       item_condition, num_vars
+                       item_condition
+                       ,shipping
+                       ,desc_len
+                       # ,num_vars
                        # ,may_have_vars
                        #    , price_vars
                        ], output)
@@ -474,11 +490,13 @@ test = pd.read_table(path + "test.tsv", sep=None, engine='python')
 # test = pd.read_table("../input/test.tsv", sep=None, engine='python')
 print(train.shape)
 print(test.shape)
-
 time1 = time.time()
+
+
 # drop low price data  (ADDNEW)
 train = train.drop(train[(train.price < 3.0)].index)
 train, test = data_preprocessing(train, test)
+
 
 # split category to 3 levels
 train = category_split(train)
@@ -486,6 +504,7 @@ test = category_split(test)
 print("category spliting complete")
 time2 = time.time()
 
+# add mean price for 3 categories
 train, test = add_mean_category_price(train, test)
 time3 = time.time()
 
@@ -497,16 +516,18 @@ time4 = time.time()
 # print("Test lemmalization finished")
 time5 = time.time()
 
+# label encoder
 train, test = label_encoder(train, test, "level1")
 train, test = label_encoder(train, test, "level2")
 train, test = label_encoder(train, test, "level3")
 train, test = label_encoder(train, test, "brand_name")
+# train, test = label_encoder(train, test, "category_name")
 print("Label encoding finished")
 time6 = time.time()
 
 # PROCESS TEXT: RAW
 # raw_text = np.hstack([train.desc_lemmas, test.desc_lemmas, train.name, test.name])
-raw_text = np.hstack([train.item_description, test.item_description, train.name, test.name, train.category_name, test.category_name])
+raw_text = np.hstack([train.item_description, test.item_description, train.name, test.name])
 print("Text to seq process finished")
 time7 = time.time()
 
@@ -570,8 +591,8 @@ time12 = time.time()
 # print('item description sentiment for test set finished.')
 time13 = time.time()
 
-train, test = add_additional_feature(train, test)
-print('add_additional_feature finished.')
+# train, test = add_additional_feature(train, test)
+# print('add_additional_feature finished.')
 time14 = time.time()
 
 print("time 1 {0}".format(time2-time1))
@@ -607,9 +628,9 @@ print("time 13 {0}".format(time14-time13))
 # Base on the histograms, we select the next lengths
 MAX_NAME_SEQ = 10
 MAX_ITEM_DESC_SEQ = 75
-MAX_CATE_SEQ = 10
+MAX_CATE_SEQ = 8
 # MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, test.seq_name, train.seq_name, test.seq_category_name, train.seq_category_name]))).shape[0] + 1
-MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, test.seq_name, train.seq_name]))).shape[0] + 1
+MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, train.seq_name, test.seq_name]))).shape[0] + 1
 MAX_CATEGORY1 = np.unique(np.concatenate([train.level1, test.level1])).shape[0] + 1
 MAX_CATEGORY2 = np.unique(np.concatenate([train.level2, test.level2])).shape[0] + 1
 MAX_CATEGORY3 = np.unique(np.concatenate([train.level3, test.level3])).shape[0] + 1
@@ -634,7 +655,7 @@ X_test = get_keras_data(test)
 
 # FITTING THE MODEL
 BATCH_SIZE = 512*3
-epochs = 3
+epochs = 2
 
 model = get_model()
 model.summary()
@@ -685,6 +706,61 @@ print("time 5{0}".format(time6-time5))
 
 timettl2 = time.time()
 print(timettl2 - timettl1)
+
+
+preds_train = model.predict(X_train, batch_size=BATCH_SIZE)
+preds_valid = model.predict(X_valid, batch_size=BATCH_SIZE)
+preds_train = target_scaler.inverse_transform(preds_train)
+preds_valid = target_scaler.inverse_transform(preds_valid)
+preds_train = np.exp(preds_train) - 1
+preds_valid = np.exp(preds_valid) - 1
+
+dtrain.loc[:, "price_rnn"] = preds_train
+dvalid.loc[:, "price_rnn"] = preds_valid
+test.loc[:, "price_rnn"] = preds
+
+dtrain.to_csv("./xgbtrain.csv", index=False)
+dvalid.to_csv("./xgbval.csv", index=False)
+test.to_csv("./xgbtest.csv", index=False)
+
+
+dtrain = pd.read_csv("./xgbtrain.csv")
+dvalid = pd.read_csv("./xgbval.csv")
+test = pd.read_csv("./xgbtest.csv")
+
+xgb_train = dtrain["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+xgb_train_y = dtrain['target']
+xgb_valid = dvalid["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+xgb_valid_y = dvalid['target']
+xgb_test = test["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+
+d_train = xgb.DMatrix(xgb_train, xgb_train_y)
+d_valid = xgb.DMatrix(xgb_valid, xgb_valid_y)
+d_test1 = xgb.DMatrix(xgb_valid)
+d_test2 = xgb.DMatrix(xgb_test)
+watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+
+params = {
+    'booster': 'gbtree',
+    'min_child_weight': 7,  # CV   # 越高越可以避免overfitting，其值需要随着max_depth增大而增大。其本身大小也和train set size有关。
+    'objective': 'binary:logistic',  # 0/1结果准确率
+    'eval_metric': 'logloss',
+    'max_depth': 8,  # CV  # 越高越容易overfitting，树越深越容易受到噪音、错误数据、样本误差的干扰
+    # 'max_delta_step': 1.8,  # CV
+    'max_delta_step': 3,  # CV  5
+    'colsample_bytree': 0.8,
+    'subsample': 0.8,  # CV
+    'eta': 0.025,
+    'gamma': 1,  # CV
+    # 'scale_pos_weight': 2,
+    'alpha': 3,
+    'lambda': 3,
+    'seed': 44
+    }
+
+
+mdl = xgb.train(params, d_train, 300, watchlist, early_stopping_rounds=20, verbose_eval=1)
+joblib.dump(mdl, "./submission_xgb.csv", compress=3)
 
 # 1466844/1466844 [==============================] - 586s 400us/step - loss: 0.0186 - mean_absolute_error: 0.1033 - rmsle_cust: 0.0043 - val_loss: 0.0202 - val_mean_absolute_error: 0.1073 - val_rmsle_cust: 0.0041
 # RMSLE error on dev test: 0.45720729563135387
