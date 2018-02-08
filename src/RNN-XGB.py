@@ -390,9 +390,12 @@ def get_keras_data(dataset):
         #                                 "may_used", "may_have_mat",
         #                                 # "desc_sentiment",
         #                                 "mean_price1", "mean_price2", "mean_price3"]])
+        # , 'mean_price1': np.array(dataset[["mean_price1"]])
+        # , 'mean_price2': np.array(dataset[["mean_price2"]])
+        # , 'mean_price3': np.array(dataset[["mean_price3"]])
         , 'shipping': np.array(dataset[["shipping"]])
         , 'desc_len': np.array(dataset[["desc_len"]])
-        # , 'name_len': np.array(dataset[["name_len"]])
+        , 'name_len': np.array(dataset[["name_len"]])
         # , 'may_have_vars': np.array(dataset[["may_have_pictures", "may_have_box", "may_have_ins", "may_used", "may_have_mat",]])
         # , 'price_vars': np.array(dataset[["mean_price1", "mean_price2", "mean_price3"]])
     }
@@ -414,7 +417,10 @@ def get_model():
     item_condition = Input(shape=[1], name="item_condition")
     shipping = Input(shape=[1], name="shipping")
     desc_len = Input(shape=[1], name="desc_len")
-    # name_len = Input(shape=[1], name="name_len")
+    name_len = Input(shape=[1], name="name_len")
+    # mean_price1 = Input(shape=[1], name="mean_price1")
+    # mean_price2 = Input(shape=[1], name="mean_price2")
+    # mean_price3 = Input(shape=[1], name="mean_price3")
 
     # num_vars = Input(shape=[X_train["num_vars"].shape[1]], name="num_vars")
     # may_have_vars = Input(shape=[X_train["may_have_vars"].shape[1]], name="may_have_vars")
@@ -432,6 +438,10 @@ def get_model():
     emb_item_condition = Embedding(MAX_CONDITION, 5)(item_condition)
     emb_shipping = Embedding(MAX_CONDITION, 5)(shipping)
     emb_desc_len = Embedding(MAX_CONDITION, 5)(desc_len)
+    emb_name_len = Embedding(MAX_CONDITION, 5)(name_len)
+    # emb_mean_price1 = Embedding(MAX_CONDITION, 5)(mean_price1)
+    # emb_mean_price2 = Embedding(MAX_CONDITION, 5)(mean_price2)
+    # emb_mean_price3 = Embedding(MAX_CONDITION, 5)(mean_price3)
 
     # gru layer
     rnn_layer1 = GRU(16)(emb_item_desc)
@@ -446,6 +456,10 @@ def get_model():
                           Flatten()(emb_item_condition),
                           Flatten()(emb_shipping),
                           Flatten()(emb_desc_len),
+                          Flatten()(emb_name_len),
+                          # Flatten()(emb_mean_price1),
+                          # Flatten()(emb_mean_price2),
+                          # Flatten()(emb_mean_price3),
                           rnn_layer1,
                           rnn_layer2,
                           # rnn_layer3,
@@ -469,8 +483,12 @@ def get_model():
                        # category_name,
                        category1_name, category2_name, category3_name,
                        item_condition
-                       ,shipping
-                       ,desc_len
+                       , shipping
+                       , desc_len
+                       , name_len
+                       # , mean_price1
+                       # , mean_price2
+                       # , mean_price3
                        # ,num_vars
                        # ,may_have_vars
                        #    , price_vars
@@ -569,15 +587,15 @@ time10 = time.time()
 
 train['desc_len'] = train['item_description'].apply(lambda x: wordCount(x))
 test['desc_len'] = test['item_description'].apply(lambda x: wordCount(x))
-# train['name_len'] = train['name'].apply(lambda x: wordCount(x))
-# test['name_len'] = test['name'].apply(lambda x: wordCount(x))
+train['name_len'] = train['name'].apply(lambda x: wordCount(x))
+test['name_len'] = test['name'].apply(lambda x: wordCount(x))
 
 idx_split = len(train.item_description)
 scaler = MinMaxScaler()
 all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
 train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
-# all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
-# train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
+train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
 
 print("desc length calculation finish")
 time11 = time.time()
@@ -719,9 +737,9 @@ dtrain.loc[:, "price_rnn"] = preds_train
 dvalid.loc[:, "price_rnn"] = preds_valid
 test.loc[:, "price_rnn"] = preds
 
-dtrain.to_csv("./xgbtrain.csv", index=False)
-dvalid.to_csv("./xgbval.csv", index=False)
-test.to_csv("./xgbtest.csv", index=False)
+dtrain.to_csv("./xgbtrain.csv", index=False, encoding='utf-8')
+dvalid.to_csv("./xgbval.csv", index=False, encoding='utf-8')
+test.to_csv("./xgbtest.csv", index=False, encoding='utf-8')
 
 
 dtrain = pd.read_csv("./xgbtrain.csv")
