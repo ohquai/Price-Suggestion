@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
 
@@ -6,12 +7,14 @@ from multiprocessing import Pool
 from sklearn.model_selection import train_test_split
 from sklearn.externals import joblib
 from keras.preprocessing.text import Tokenizer
+from keras.optimizers import Adam
 from keras.layers import Input, Dropout, Dense, BatchNormalization, Activation, concatenate, GRU, Embedding, Flatten, \
     BatchNormalization, LSTM
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
 from keras import backend as K
 from keras.preprocessing.sequence import pad_sequences
+from keras import initializers
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
@@ -48,57 +51,102 @@ def rmsle_cust(y_true, y_pred):
 
 def rmsle(y, y_pred):
     """
-    code from https://www.kaggle.com/marknagelberg/rmsle-function
+    for evaluate validation set, code from https://www.kaggle.com/marknagelberg/rmsle-function
     :type y_pred: list
     """
     assert len(y) == len(y_pred)
     to_sum = [(math.log(y_pred[i] + 1) - math.log(y[i] + 1)) ** 2.0 for i, pred in enumerate(y_pred)]
     return (sum(to_sum) * (1.0 / len(y))) ** 0.5
 
+# def rmsle(Y, Y_pred):
+#     assert Y.shape == Y_pred.shape
+#     return np.sqrt(np.mean(np.square(Y_pred - Y )))
 
-def fill_missing_value(df):
-    # HANDLE MISSING VALUES
-    print("start fill_na with proper values")
 
-    df.category_name.fillna(value="missing/missing/missing", inplace=True)
+# def fill_missing_value(df):
+#     # HANDLE MISSING VALUES
+#     print("start fill_na with proper values")
+#
+#     df.category_name.fillna(value="missing/missing/missing", inplace=True)
+#
+#     df["brand_name"] = df["brand_name"].fillna("unknown")
+#     pop_brands = df["brand_name"].value_counts().loc[lambda x: x.index != 'missing'].index[:NUM_BRANDS]
+#     df.loc[~df["brand_name"].isin(pop_brands), "brand_name"] = "Other"
+#
+#     df.item_description.fillna(value="missing", inplace=True)
+#
+#     print(df.memory_usage(deep=True))
+#     return df
+#     # df.brand_name.fillna(value="missing", inplace=True)
 
-    df["brand_name"] = df["brand_name"].fillna("unknown")
-    pop_brands = df["brand_name"].value_counts().loc[lambda x: x.index != 'missing'].index[:NUM_BRANDS]
-    df.loc[~df["brand_name"].isin(pop_brands), "brand_name"] = "Other"
 
+# Filling missing values
+def fill_missing_values(df):
+    df.category_name.fillna(value="missing", inplace=True)
+    df.brand_name.fillna(value="missing", inplace=True)
     df.item_description.fillna(value="missing", inplace=True)
-
-    print(df.memory_usage(deep=True))
+    df.item_description.replace('no description yet', "missing", inplace=True)
     return df
-    # df.brand_name.fillna(value="missing", inplace=True)
 
 
-def category_split(df):
+# def category_split(df):
+#     def list_2_str(l):
+#         cat_name = ""
+#         for piece in l:
+#             cat_name += piece
+#         return cat_name
+#
+#     for a in df['category_name']:
+#         print(a)
+#         print(str(a).split("/")[1])
+#
+#     # split category into 3 levels
+#     df['level1'] = [str(a).split("/")[0] for a in df['category_name']]
+#     df['level2'] = [str(a).split("/")[1] for a in df['category_name']]
+#     df['level3'] = [list_2_str(str(a).split("/")[2:]) for a in df['category_name']]
+#
+#     return df
+
+
+def brandfinder(line):
+    brand = line[0]
+    name = line[1]
+    namesplit = name.split(' ')
+    if brand == 'missing':
+        for x in namesplit:
+            # if x in all_brands:
+            #     return name
+            if x in all_brands and x != '47':
+                return x
+    if name in all_brands:
+        # print("name is in brand list : {0}".format(name))
+        return name
+    return brand
+
+
+def category_split(text):
     def list_2_str(l):
         cat_name = ""
         for piece in l:
             cat_name += piece
         return cat_name
 
-    # split category into 3 levels
-    df['level1'] = [a.split("/")[0] for a in df['category_name']]
-    df['level2'] = [a.split("/")[1] for a in df['category_name']]
-    df['level3'] = [list_2_str(a.split("/")[2:]) for a in df['category_name']]
-    # df = df.drop(['category_name'], axis=1)
-    return df
+    def txt_split(text):
+        return text.split("/")[0], text.split("/")[1], list_2_str(text.split("/")[2:])
 
-
-# get name and description lengths
-def wordCount(text):
     try:
-        if text == 'No description yet':
-            return 0
-        else:
-            text = text.lower()
-            words = [w for w in text.split(" ")]
-            return len(words)
+        # return text.split("/")
+        return txt_split(text)
     except:
-        return 0
+        return"No Label", "No Label", "No Label"
+
+
+# split category name into 3 parts
+def split_cat(text):
+    try:
+        return text.split("/")
+    except:
+        return"No Label", "No Label", "No Label"
 
 
 def label_encoder(train, test, col_name):
@@ -357,22 +405,32 @@ def add_mean_category_price(train, test):
     return train, test
 
 
-def data_preprocessing(train, test):
-    # fill nan value
-    train = fill_missing_value(train)
-    test = fill_missing_value(test)
-    print("filling missing value complete")
-
-    # transform descriptions and names to lower cases
-    train.loc[:, 'item_description'] = train.item_description.str.lower()
-    test.loc[:, 'item_description'] = test.item_description.str.lower()
-    train.loc[:, 'name'] = train.name.str.lower()
-    test.loc[:, 'name'] = test.name.str.lower()
-    train.loc[:, 'category_name'] = train.category_name.str.lower()
-    test.loc[:, 'category_name'] = test.category_name.str.lower()
+def to_lowercase(train, test):
+    # transform descriptions, category names and product names to lower cases
+    train['item_description'] = train.item_description.str.lower()
+    test['item_description'] = test.item_description.str.lower()
+    train['name'] = train.name.str.lower()
+    test['name'] = test.name.str.lower()
+    train['brand_name'] = train.brand_name.str.lower()
+    test['brand_name'] = test.brand_name.str.lower()
+    train['category_name'] = train.category_name.str.lower()
+    test['category_name'] = test.category_name.str.lower()
     print("Text to lower cases finished")
 
     return train, test
+
+
+# get name and description lengths
+def wordCount(text):
+    try:
+        if text == 'no description yet':
+            return 0
+        else:
+            # text = text.lower()
+            words = [w for w in text.split(" ")]
+            return len(words)
+    except:
+        return 0
 
 
 # KERAS DATA DEFINITION
@@ -381,50 +439,39 @@ def get_keras_data(dataset):
         'name': pad_sequences(dataset.seq_name, maxlen=MAX_NAME_SEQ)
         , 'item_desc': pad_sequences(dataset.seq_item_description, maxlen=MAX_ITEM_DESC_SEQ)
         , 'brand_name': np.array(dataset.brand_name)
-        # , 'category_name': pad_sequences(dataset.seq_category_name, maxlen=MAX_CATE_SEQ)
         , 'category1_name': np.array(dataset.level1)
         , 'category2_name': np.array(dataset.level2)
         , 'category3_name': np.array(dataset.level3)
         , 'item_condition': np.array(dataset.item_condition_id)
-        # , 'num_vars': np.array(dataset[["shipping", "desc_len", "may_have_pictures", "may_have_box", "may_have_ins",
-        #                                 "may_used", "may_have_mat",
-        #                                 # "desc_sentiment",
-        #                                 "mean_price1", "mean_price2", "mean_price3"]])
         # , 'mean_price1': np.array(dataset[["mean_price1"]])
         # , 'mean_price2': np.array(dataset[["mean_price2"]])
         # , 'mean_price3': np.array(dataset[["mean_price3"]])
         , 'shipping': np.array(dataset[["shipping"]])
         , 'desc_len': np.array(dataset[["desc_len"]])
         , 'name_len': np.array(dataset[["name_len"]])
-        # , 'may_have_vars': np.array(dataset[["may_have_pictures", "may_have_box", "may_have_ins", "may_used", "may_have_mat",]])
-        # , 'price_vars': np.array(dataset[["mean_price1", "mean_price2", "mean_price3"]])
     }
     return X
 
 
-def get_model():
+def get_model(lr=0.001, decay=0.0):
     # params
     dr_r = 0.1
 
     # Inputs
     name = Input(shape=[X_train["name"].shape[1]], name="name")
     item_desc = Input(shape=[X_train["item_desc"].shape[1]], name="item_desc")
+    shipping = Input(shape=[X_train["shipping"].shape[1]], name="shipping")
     brand_name = Input(shape=[1], name="brand_name")
-    # category_name = Input(shape=[X_train["category_name"].shape[1]], name="category_name")
     category1_name = Input(shape=[1], name="category1_name")
     category2_name = Input(shape=[1], name="category2_name")
     category3_name = Input(shape=[1], name="category3_name")
     item_condition = Input(shape=[1], name="item_condition")
-    shipping = Input(shape=[1], name="shipping")
+    # shipping = Input(shape=[1], name="shipping")
     desc_len = Input(shape=[1], name="desc_len")
     name_len = Input(shape=[1], name="name_len")
     # mean_price1 = Input(shape=[1], name="mean_price1")
     # mean_price2 = Input(shape=[1], name="mean_price2")
     # mean_price3 = Input(shape=[1], name="mean_price3")
-
-    # num_vars = Input(shape=[X_train["num_vars"].shape[1]], name="num_vars")
-    # may_have_vars = Input(shape=[X_train["may_have_vars"].shape[1]], name="may_have_vars")
-    # price_vars = Input(shape=[X_train["price_vars"].shape[1]], name="price_vars")
 
     # Embeddings layers
     emb_size = 60
@@ -436,9 +483,9 @@ def get_model():
     emb_category2_name = Embedding(MAX_CATEGORY2, 10)(category2_name)
     emb_category3_name = Embedding(MAX_CATEGORY3, 10)(category3_name)
     emb_item_condition = Embedding(MAX_CONDITION, 5)(item_condition)
-    emb_shipping = Embedding(MAX_CONDITION, 5)(shipping)
-    emb_desc_len = Embedding(MAX_CONDITION, 5)(desc_len)
-    emb_name_len = Embedding(MAX_CONDITION, 5)(name_len)
+    # emb_shipping = Embedding(MAX_CONDITION, 5)(shipping)
+    emb_desc_len = Embedding(MAX_DESC_LEN, 5)(desc_len)
+    emb_name_len = Embedding(MAX_NAME_LEN, 5)(name_len)
     # emb_mean_price1 = Embedding(MAX_CONDITION, 5)(mean_price1)
     # emb_mean_price2 = Embedding(MAX_CONDITION, 5)(mean_price2)
     # emb_mean_price3 = Embedding(MAX_CONDITION, 5)(mean_price3)
@@ -446,7 +493,6 @@ def get_model():
     # gru layer
     rnn_layer1 = GRU(16)(emb_item_desc)
     rnn_layer2 = GRU(8)(emb_name)
-    # rnn_layer3 = GRU(8)(emb_category_name)
 
     # main layer
     main_l = concatenate([Flatten()(emb_brand_name),
@@ -454,7 +500,6 @@ def get_model():
                           Flatten()(emb_category2_name),
                           Flatten()(emb_category3_name),
                           Flatten()(emb_item_condition),
-                          Flatten()(emb_shipping),
                           Flatten()(emb_desc_len),
                           Flatten()(emb_name_len),
                           # Flatten()(emb_mean_price1),
@@ -462,17 +507,19 @@ def get_model():
                           # Flatten()(emb_mean_price3),
                           rnn_layer1,
                           rnn_layer2,
-                          # rnn_layer3,
-                          # num_vars
-                          # , may_have_vars
-                          # , price_vars
+                          shipping
                           ])
 
     # main_l = Dropout(dr_r)(Dense(256)(main_l))
-    main_l = Dropout(dr_r)(Dense(512, activation='relu')(main_l))
-    main_l = Dropout(dr_r)(Dense(256, activation='relu')(main_l))
-    main_l = Dropout(dr_r)(Dense(128, activation='relu')(main_l))
-    main_l = Dropout(dr_r)(Dense(64, activation='relu')(main_l))
+    main_l = Dropout(dr_r)(Dense(512, kernel_initializer='normal', activation='relu')(main_l))
+    main_l = Dropout(dr_r)(Dense(256, kernel_initializer='normal', activation='relu')(main_l))
+    main_l = Dropout(dr_r)(Dense(128, kernel_initializer='normal', activation='relu')(main_l))
+    main_l = Dropout(dr_r)(Dense(64, kernel_initializer='normal', activation='relu')(main_l))
+    main_l = Dropout(dr_r)(Dense(32, kernel_initializer='normal', activation='relu')(main_l))
+    # main_l = Dropout(dr_r)(Dense(512, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
+    # main_l = Dropout(dr_r)(Dense(256, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
+    # main_l = Dropout(dr_r)(Dense(128, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
+    # main_l = Dropout(dr_r)(Dense(64, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
     # main_l = Dropout(dr_r)(Dense(16, activation='relu')(main_l))
 
     # output
@@ -480,20 +527,17 @@ def get_model():
 
     # model
     model_gru = Model([name, item_desc, brand_name,
-                       # category_name,
                        category1_name, category2_name, category3_name,
-                       item_condition
-                       , shipping
-                       , desc_len
-                       , name_len
-                       # , mean_price1
-                       # , mean_price2
-                       # , mean_price3
+                       item_condition, shipping
+                       , desc_len , name_len
+                       # , mean_price1, mean_price2, mean_price3
                        # ,num_vars
                        # ,may_have_vars
                        #    , price_vars
                        ], output)
-    model_gru.compile(loss="mse", optimizer="adam", metrics=["mae", rmsle_cust])
+    optimizer = Adam(lr=lr, decay=decay)
+    model_gru.compile(loss="mse", optimizer=optimizer, metrics=["mae", rmsle_cust])
+    # model_gru.compile(loss="mse", optimizer=optimizer)
     return model_gru
 
 
@@ -506,25 +550,67 @@ train = pd.read_table(path + "train.tsv", sep=None, engine='python')
 test = pd.read_table(path + "test.tsv", sep=None, engine='python')
 # train = pd.read_table("../input/train.tsv", sep=None, engine='python')
 # test = pd.read_table("../input/test.tsv", sep=None, engine='python')
+print("find {0} brand names".format(len(set(train['brand_name']+test['brand_name']))))
 print(train.shape)
 print(test.shape)
 time1 = time.time()
 
+# SCALE target variable
+train["target"] = np.log(train.price + 1)
+# target_scaler = MinMaxScaler(feature_range=(-1, 1))
+# train["target"] = target_scaler.fit_transform(train.target.values.reshape(-1, 1))
 
-# drop low price data  (ADDNEW)
-train = train.drop(train[(train.price < 3.0)].index)
-train, test = data_preprocessing(train, test)
+# train = train.drop(train[(train.price < 3.0)].index)
+train.drop(train[(train.price < 3.0)].index, inplace=True)
+train, test = to_lowercase(train, test)
 
+# calculate description and product name length
+train['desc_len'] = train['item_description'].apply(lambda x: wordCount(x))
+test['desc_len'] = test['item_description'].apply(lambda x: wordCount(x))
+train['name_len'] = train['name'].apply(lambda x: wordCount(x))
+test['name_len'] = test['name'].apply(lambda x: wordCount(x))
+
+
+# satandard scaler for length
+# idx_split = len(train.item_description)
+# scaler = MinMaxScaler()
+# all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
+# train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+# all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
+# train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+# print("desc length calculation finish")
 
 # split category to 3 levels
-train = category_split(train)
-test = category_split(test)
+# 其实我的方法更准确一些
+# train = category_split(train)
+# test = category_split(test)
+# train['level1'], train['level2'], train['level3'] = zip(*train['category_name'].apply(lambda x: split_cat(x)))
+# test['level1'], test['level2'], test['level3'] = zip(*test['category_name'].apply(lambda x: split_cat(x)))
+train['level1'], train['level2'], train['level3'] = zip(*train['category_name'].apply(lambda x: category_split(x)))
+test['level1'], test['level2'], test['level3'] = zip(*test['category_name'].apply(lambda x: category_split(x)))
 print("category spliting complete")
-time2 = time.time()
+time2 = time.time()  # 25s
+
+# fill up missing values(brand, name, description)
+train = fill_missing_values(train)
+test = fill_missing_values(test)
+
+# complete brand name and find more hidden brand names
+full_set = pd.concat([train, test])
+all_brands = set(full_set['brand_name'].values)
+# train.brand_name.fillna(value="missing", inplace=True)
+# test.brand_name.fillna(value="missing", inplace=True)
+premissing = len(train.loc[train['brand_name'] == 'missing'])
+train['brand_name'] = train[['brand_name', 'name']].apply(brandfinder, axis=1)
+test['brand_name'] = test[['brand_name', 'name']].apply(brandfinder, axis=1)
+found = premissing-len(train.loc[train['brand_name'] == 'missing'])
+
+print("have found {0} hidden brands".format(found))
+print("now we have {0} brand names totally".format(len(set(train['brand_name']+test['brand_name']))))
 
 # add mean price for 3 categories
-train, test = add_mean_category_price(train, test)
-time3 = time.time()
+# train, test = add_mean_category_price(train, test)
+time3 = time.time()  # 56s
 
 # Lemmatize
 # train['desc_lemmas'] = get_lemma_desc(train.item_description, train.index)
@@ -566,12 +652,12 @@ test["seq_name"] = tok_raw.texts_to_sequences(test.name)
 print("texts_to_sequences finished")
 time9 = time.time()
 
-# SEQUENCES VARIABLES ANALYSIS
-max_name_seq = np.max([np.max(train.seq_name.apply(lambda x: len(x))), np.max(test.seq_name.apply(lambda x: len(x)))])
-max_seq_item_description = np.max([np.max(train.seq_item_description.apply(lambda x: len(x))),
-                                   np.max(test.seq_item_description.apply(lambda x: len(x)))])
-print("max name seq " + str(max_name_seq))
-print("max item desc seq " + str(max_seq_item_description))
+# SEQUENCES VARIABLES ANALYSIS(用于设定合理的参数值)
+# max_name_seq = np.max([np.max(train.seq_name.apply(lambda x: len(x))), np.max(test.seq_name.apply(lambda x: len(x)))])
+# max_seq_item_description = np.max([np.max(train.seq_item_description.apply(lambda x: len(x))),
+#                                    np.max(test.seq_item_description.apply(lambda x: len(x)))])
+# print("max name seq " + str(max_name_seq))
+# print("max item desc seq " + str(max_seq_item_description))
 time10 = time.time()
 
 # Add description length
@@ -585,19 +671,7 @@ time10 = time.time()
 # print("desc length calculation finish")
 # time11 = time.time()
 
-train['desc_len'] = train['item_description'].apply(lambda x: wordCount(x))
-test['desc_len'] = test['item_description'].apply(lambda x: wordCount(x))
-train['name_len'] = train['name'].apply(lambda x: wordCount(x))
-test['name_len'] = test['name'].apply(lambda x: wordCount(x))
 
-idx_split = len(train.item_description)
-scaler = MinMaxScaler()
-all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
-train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
-all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
-train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
-
-print("desc length calculation finish")
 time11 = time.time()
 
 # Add sentiment scores
@@ -647,18 +721,23 @@ print("time 13 {0}".format(time14-time13))
 MAX_NAME_SEQ = 10
 MAX_ITEM_DESC_SEQ = 75
 MAX_CATE_SEQ = 8
-# MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, test.seq_name, train.seq_name, test.seq_category_name, train.seq_category_name]))).shape[0] + 1
-MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, train.seq_name, test.seq_name]))).shape[0] + 1
-MAX_CATEGORY1 = np.unique(np.concatenate([train.level1, test.level1])).shape[0] + 1
-MAX_CATEGORY2 = np.unique(np.concatenate([train.level2, test.level2])).shape[0] + 1
-MAX_CATEGORY3 = np.unique(np.concatenate([train.level3, test.level3])).shape[0] + 1
-MAX_BRAND = np.unique(np.concatenate([train.brand_name, test.brand_name])).shape[0] + 1
-MAX_CONDITION = np.unique(np.concatenate([train.item_condition_id, test.item_condition_id])).shape[0] + 1
+# MAX_TEXT = np.unique(flatten(np.concatenate([train.seq_item_description, test.seq_item_description, train.seq_name, test.seq_name]))).shape[0] + 1
+# MAX_CATEGORY1 = np.unique(np.concatenate([train.level1, test.level1])).shape[0] + 1
+# MAX_CATEGORY2 = np.unique(np.concatenate([train.level2, test.level2])).shape[0] + 1
+# MAX_CATEGORY3 = np.unique(np.concatenate([train.level3, test.level3])).shape[0] + 1
+# MAX_BRAND = np.unique(np.concatenate([train.brand_name, test.brand_name])).shape[0] + 1
+# MAX_CONDITION = np.unique(np.concatenate([train.item_condition_id, test.item_condition_id])).shape[0] + 1
+# MAX_DESC_LEN = np.unique(np.concatenate([train.desc_len, test.desc_len])).shape[0] + 1
+# MAX_NAME_LEN = np.unique(np.concatenate([train.name_len, test.name_len])).shape[0] + 1
+MAX_TEXT = np.max([np.max(train.seq_item_description.max()), np.max(test.seq_item_description.max()), np.max(train.seq_name.max()), np.max(test.seq_name.max())]) + 100
+MAX_CATEGORY1 = np.max([np.max(train.level1.max()), np.max(test.level1.max())]) + 1
+MAX_CATEGORY2 = np.max([np.max(train.level2.max()), np.max(test.level2.max())]) + 1
+MAX_CATEGORY3 = np.max([np.max(train.level3.max()), np.max(test.level3.max())]) + 1
+MAX_BRAND = np.max([np.max(train.brand_name.max()), np.max(test.brand_name.max())]) + 1
+MAX_CONDITION = np.max([np.max(train.item_condition_id.max()), np.max(test.item_condition_id.max())]) + 1
+MAX_DESC_LEN = np.max([np.max(train.desc_len.max()), np.max(test.desc_len.max())]) + 1
+MAX_NAME_LEN = np.max([np.max(train.name_len.max()), np.max(test.name_len.max())]) + 1
 
-# SCALE target variable
-train["target"] = np.log(train.price + 1)
-target_scaler = MinMaxScaler(feature_range=(-1, 1))
-train["target"] = target_scaler.fit_transform(train.target.values.reshape(-1, 1))
 
 # train.to_csv(path + "clean_train.csv", encoding="utf8")
 
@@ -675,19 +754,24 @@ X_test = get_keras_data(test)
 BATCH_SIZE = 512*3
 epochs = 2
 
-model = get_model()
+# Calculate learning rate decay.
+exp_decay = lambda init, fin, steps: (init/fin)**(1/(steps-1)) - 1
+steps = int(len(X_train['name']) / BATCH_SIZE) * epochs
+lr_init, lr_fin = 0.005, 0.001
+lr_decay = exp_decay(lr_init, lr_fin, steps)
+
+model = get_model(lr=lr_init, decay=lr_decay)
 model.summary()
 early_stopping = EarlyStopping(monitor='val_loss', patience=2, min_delta=0.01, mode='min')
-model.fit(X_train, dtrain.target, epochs=epochs, batch_size=BATCH_SIZE, validation_data=(X_valid, dvalid.target),
-          verbose=1)
+model.fit(X_train, dtrain.target, epochs=epochs, batch_size=BATCH_SIZE, validation_data=(X_valid, dvalid.target), verbose=1)
 
 print('model fitting finished.')
 time1 = time.time()
 
 # EVLUEATE THE MODEL ON DEV TEST: What is it doing?
 val_preds = model.predict(X_valid)
-val_preds = target_scaler.inverse_transform(val_preds)
-val_preds = np.exp(val_preds) + 1
+# val_preds = target_scaler.inverse_transform(val_preds)
+val_preds = np.exp(val_preds) - 1
 print(len(val_preds))
 print('val predict calculated.')
 time2 = time.time()
@@ -701,7 +785,8 @@ time3 = time.time()
 
 # CREATE PREDICTIONS
 preds = model.predict(X_test, batch_size=BATCH_SIZE)
-preds = target_scaler.inverse_transform(preds)
+# train["target"] = np.log(train.price + 1)
+# preds = target_scaler.inverse_transform(preds)
 preds = np.exp(preds) - 1
 print(len(preds))
 print('test predict calculated.')
@@ -725,65 +810,68 @@ print("time 5{0}".format(time6-time5))
 timettl2 = time.time()
 print(timettl2 - timettl1)
 
+#
+# preds_train = model.predict(X_train, batch_size=BATCH_SIZE)
+# preds_valid = model.predict(X_valid, batch_size=BATCH_SIZE)
+# preds_train = target_scaler.inverse_transform(preds_train)
+# preds_valid = target_scaler.inverse_transform(preds_valid)
+# preds_train = np.exp(preds_train) - 1
+# preds_valid = np.exp(preds_valid) - 1
+#
+# dtrain.loc[:, "price_rnn"] = preds_train
+# dvalid.loc[:, "price_rnn"] = preds_valid
+# test.loc[:, "price_rnn"] = preds
+#
+# dtrain.to_csv("./xgbtrain.csv", index=False, encoding='utf-8')
+# dvalid.to_csv("./xgbval.csv", index=False, encoding='utf-8')
+# test.to_csv("./xgbtest.csv", index=False, encoding='utf-8')
+#
+#
+# dtrain = pd.read_csv("./xgbtrain.csv")
+# dvalid = pd.read_csv("./xgbval.csv")
+# test = pd.read_csv("./xgbtest.csv")
+#
+# xgb_train = dtrain["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+# xgb_train_y = dtrain['target']
+# xgb_valid = dvalid["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+# xgb_valid_y = dvalid['target']
+# xgb_test = test["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
+#
+# d_train = xgb.DMatrix(xgb_train, xgb_train_y)
+# d_valid = xgb.DMatrix(xgb_valid, xgb_valid_y)
+# d_test1 = xgb.DMatrix(xgb_valid)
+# d_test2 = xgb.DMatrix(xgb_test)
+# watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+#
+# params = {
+#     'booster': 'gbtree',
+#     'min_child_weight': 7,  # CV   # 越高越可以避免overfitting，其值需要随着max_depth增大而增大。其本身大小也和train set size有关。
+#     'objective': 'binary:logistic',  # 0/1结果准确率
+#     'eval_metric': 'logloss',
+#     'max_depth': 8,  # CV  # 越高越容易overfitting，树越深越容易受到噪音、错误数据、样本误差的干扰
+#     # 'max_delta_step': 1.8,  # CV
+#     'max_delta_step': 3,  # CV  5
+#     'colsample_bytree': 0.8,
+#     'subsample': 0.8,  # CV
+#     'eta': 0.025,
+#     'gamma': 1,  # CV
+#     # 'scale_pos_weight': 2,
+#     'alpha': 3,
+#     'lambda': 3,
+#     'seed': 44
+#     }
+#
+#
+# mdl = xgb.train(params, d_train, 300, watchlist, early_stopping_rounds=20, verbose_eval=1)
+# joblib.dump(mdl, "./submission_xgb.csv", compress=3)
 
-preds_train = model.predict(X_train, batch_size=BATCH_SIZE)
-preds_valid = model.predict(X_valid, batch_size=BATCH_SIZE)
-preds_train = target_scaler.inverse_transform(preds_train)
-preds_valid = target_scaler.inverse_transform(preds_valid)
-preds_train = np.exp(preds_train) - 1
-preds_valid = np.exp(preds_valid) - 1
+### 1466844/1466844 [==============================] - 586s 400us/step - loss: 0.0186 - mean_absolute_error: 0.1033 - rmsle_cust: 0.0043 - val_loss: 0.0202 - val_mean_absolute_error: 0.1073 - val_rmsle_cust: 0.0041
+### RMSLE error on dev test: 0.45720729563135387
+### online 0.44947
 
-dtrain.loc[:, "price_rnn"] = preds_train
-dvalid.loc[:, "price_rnn"] = preds_valid
-test.loc[:, "price_rnn"] = preds
-
-dtrain.to_csv("./xgbtrain.csv", index=False, encoding='utf-8')
-dvalid.to_csv("./xgbval.csv", index=False, encoding='utf-8')
-test.to_csv("./xgbtest.csv", index=False, encoding='utf-8')
+### 采用了新的长度计算方式，运行了一个epoch，大约在13min左右
+### 1465344/1466844 [============================>.] - ETA: 0s - loss: 0.0791 - mean_absolute_error: 0.1863 - rmsle_cust: 0.0071
+### 1466844/1466844 [==============================] - 645s 440us/step - loss: 0.0790 - mean_absolute_error: 0.1862 - rmsle_cust: 0.0071 - val_loss: 0.0248 - val_mean_absolute_error: 0.1207 - val_rmsle_cust: 0.0048
 
 
-dtrain = pd.read_csv("./xgbtrain.csv")
-dvalid = pd.read_csv("./xgbval.csv")
-test = pd.read_csv("./xgbtest.csv")
-
-xgb_train = dtrain["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
-xgb_train_y = dtrain['target']
-xgb_valid = dvalid["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
-xgb_valid_y = dvalid['target']
-xgb_test = test["level1", "level2", "level3", "brand_name", "desc_len", "item_condition_id", "shipping", "price_rnn"]
-
-d_train = xgb.DMatrix(xgb_train, xgb_train_y)
-d_valid = xgb.DMatrix(xgb_valid, xgb_valid_y)
-d_test1 = xgb.DMatrix(xgb_valid)
-d_test2 = xgb.DMatrix(xgb_test)
-watchlist = [(d_train, 'train'), (d_valid, 'valid')]
-
-params = {
-    'booster': 'gbtree',
-    'min_child_weight': 7,  # CV   # 越高越可以避免overfitting，其值需要随着max_depth增大而增大。其本身大小也和train set size有关。
-    'objective': 'binary:logistic',  # 0/1结果准确率
-    'eval_metric': 'logloss',
-    'max_depth': 8,  # CV  # 越高越容易overfitting，树越深越容易受到噪音、错误数据、样本误差的干扰
-    # 'max_delta_step': 1.8,  # CV
-    'max_delta_step': 3,  # CV  5
-    'colsample_bytree': 0.8,
-    'subsample': 0.8,  # CV
-    'eta': 0.025,
-    'gamma': 1,  # CV
-    # 'scale_pos_weight': 2,
-    'alpha': 3,
-    'lambda': 3,
-    'seed': 44
-    }
-
-
-mdl = xgb.train(params, d_train, 300, watchlist, early_stopping_rounds=20, verbose_eval=1)
-joblib.dump(mdl, "./submission_xgb.csv", compress=3)
-
-# 1466844/1466844 [==============================] - 586s 400us/step - loss: 0.0186 - mean_absolute_error: 0.1033 - rmsle_cust: 0.0043 - val_loss: 0.0202 - val_mean_absolute_error: 0.1073 - val_rmsle_cust: 0.0041
-# RMSLE error on dev test: 0.45720729563135387
-# online 0.44947
-
-# 采用了新的长度计算方式，运行了一个epoch，大约在13min左右
-# 1465344/1466844 [============================>.] - ETA: 0s - loss: 0.0791 - mean_absolute_error: 0.1863 - rmsle_cust: 0.0071
-# 1466844/1466844 [==============================] - 645s 440us/step - loss: 0.0790 - mean_absolute_error: 0.1862 - rmsle_cust: 0.0071 - val_loss: 0.0248 - val_mean_absolute_error: 0.1207 - val_rmsle_cust: 0.0048
+# 0.4271199443002552
