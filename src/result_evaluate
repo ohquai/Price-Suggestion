@@ -3,16 +3,16 @@
 1、原始的
 0.4271199443002552
 
-2、将各类MAX_LEN均改成新方法
+2、将各类MAX_LEN均改成新方法（采用）
 0.4282473770880164
 
 3、MAX_TEXT用原来的，其余MAX_LEN改成新方法(放弃此方法)
 0.43067316635426905
 
-4、采用更正确的cat split
+4、采用更正确的cat split（采用）
 0.42759527852095397
 
-5、MAX_TXT改成+100
+5、MAX_TXT改成+100（采用）
 0.42736786198424737
 0.43930
 
@@ -20,11 +20,20 @@
 0.4285758501363032
 0.43822
 
-7、用orthogonal initialization替代gaussian initialization
+7、用orthogonal initialization替代gaussian initialization(放弃此方法)
 0.4491158347051854
 
-8、加一层fc层，kernel size=256
+8、加一层fc层，kernel size=256(放弃此方法)
 0.44028136808942425
 
-9、加一层fc层，kernel size=32
+9、加一层fc层，kernel size=32（暂不使用）
 0.4317142341695988
+0.43807
+
+10、GRU层从16-8改为32-4(放弃此方法)
+0.4347462784102053
+
+11、length经过maxmin scaler
+0.427899158883141
+
+12、添加mean price
