@@ -469,6 +469,8 @@ def get_model(lr=0.001, decay=0.0):
     # shipping = Input(shape=[1], name="shipping")
     desc_len = Input(shape=[1], name="desc_len")
     name_len = Input(shape=[1], name="name_len")
+    # desc_len = Input(shape=[X_train["desc_len"].shape[1]], name="desc_len")
+    # name_len = Input(shape=[X_train["name_len"].shape[1]], name="name_len")
     # mean_price1 = Input(shape=[1], name="mean_price1")
     # mean_price2 = Input(shape=[1], name="mean_price2")
     # mean_price3 = Input(shape=[1], name="mean_price3")
@@ -515,7 +517,7 @@ def get_model(lr=0.001, decay=0.0):
     main_l = Dropout(dr_r)(Dense(256, kernel_initializer='normal', activation='relu')(main_l))
     main_l = Dropout(dr_r)(Dense(128, kernel_initializer='normal', activation='relu')(main_l))
     main_l = Dropout(dr_r)(Dense(64, kernel_initializer='normal', activation='relu')(main_l))
-    main_l = Dropout(dr_r)(Dense(32, kernel_initializer='normal', activation='relu')(main_l))
+    # main_l = Dropout(dr_r)(Dense(32, kernel_initializer='normal', activation='relu')(main_l))
     # main_l = Dropout(dr_r)(Dense(512, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
     # main_l = Dropout(dr_r)(Dense(256, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
     # main_l = Dropout(dr_r)(Dense(128, kernel_initializer=initializers.Orthogonal(), activation='relu')(main_l))
@@ -572,13 +574,13 @@ test['name_len'] = test['name'].apply(lambda x: wordCount(x))
 
 
 # satandard scaler for length
-# idx_split = len(train.item_description)
-# scaler = MinMaxScaler()
-# all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
-# train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
-# all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
-# train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
-# print("desc length calculation finish")
+idx_split = len(train.item_description)
+scaler = MinMaxScaler()
+all_scaled = scaler.fit_transform(np.concatenate([train['desc_len'].values.reshape(-1, 1), test['desc_len'].values.reshape(-1, 1)]))
+train['desc_len'], test['desc_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+all_scaled = scaler.fit_transform(np.concatenate([train['name_len'].values.reshape(-1, 1), test['name_len'].values.reshape(-1, 1)]))
+train['name_len'], test['name_len'] = all_scaled[:idx_split], all_scaled[idx_split:]
+print("desc length calculation finish")
 
 # split category to 3 levels
 # 其实我的方法更准确一些
@@ -735,8 +737,10 @@ MAX_CATEGORY2 = np.max([np.max(train.level2.max()), np.max(test.level2.max())]) 
 MAX_CATEGORY3 = np.max([np.max(train.level3.max()), np.max(test.level3.max())]) + 1
 MAX_BRAND = np.max([np.max(train.brand_name.max()), np.max(test.brand_name.max())]) + 1
 MAX_CONDITION = np.max([np.max(train.item_condition_id.max()), np.max(test.item_condition_id.max())]) + 1
-MAX_DESC_LEN = np.max([np.max(train.desc_len.max()), np.max(test.desc_len.max())]) + 1
-MAX_NAME_LEN = np.max([np.max(train.name_len.max()), np.max(test.name_len.max())]) + 1
+# MAX_DESC_LEN = np.max([np.max(train.desc_len.max()), np.max(test.desc_len.max())]) + 1
+# MAX_NAME_LEN = np.max([np.max(train.name_len.max()), np.max(test.name_len.max())]) + 1
+MAX_DESC_LEN = len(set(list(np.concatenate([train.desc_len, test.desc_len])))) + 1
+MAX_NAME_LEN = len(set(list(np.concatenate([train.name_len, test.name_len])))) + 1
 
 
 # train.to_csv(path + "clean_train.csv", encoding="utf8")
